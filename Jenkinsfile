@@ -128,12 +128,17 @@ pipeline {
                         # Create a deployment package locally
                         tar -czf deploy.tar.gz docker-compose.yml monitoring
                         
-                        # Stop existing containers if the folder exists
+                        # Stop everything and clean up as requested
                         ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} '
                             if [ -d /home/${EC2_USER}/app ]; then
-                                cd /home/${EC2_USER}/app && docker-compose down --volumes --remove-orphans || true
+                                cd /home/${EC2_USER}/app
+                                # We create a temporary .env to allow docker-compose down to find images
+                                echo "DOCKER_USERNAME=${DOCKER_HUB_USER}" > .env
+                                docker-compose down --volumes --remove-orphans || true
                                 cd .. && rm -rf app
                             fi
+                            # Global cleanup to "remove all this"
+                            docker system prune -a -f --volumes || true
                             mkdir -p /home/${EC2_USER}/app
                         '
                         
@@ -144,7 +149,8 @@ pipeline {
                             tar -xzf deploy.tar.gz
                             rm deploy.tar.gz
                             
-                            export DOCKER_USERNAME=${DOCKER_HUB_USER}
+                            # Create .env file for docker-compose to use permanently
+                            echo "DOCKER_USERNAME=${DOCKER_HUB_USER}" > .env
                             
                             echo "Pulling latest images from Docker Hub..."
                             docker-compose pull
@@ -158,15 +164,12 @@ pipeline {
                             echo "Deployment Status:"
                             docker-compose ps
                             
-                            echo "Checking API logs for errors (last 20 lines):"
-                            docker-compose logs --tail=20 api || true
-                            
-                            echo "Cleaning up dangling images..."
-                            docker image prune -f
+                            echo "Checking API logs (last 50 lines):"
+                            docker-compose logs --tail=50 api || true
                         '
                         
                         # Cleanup local package
-                        rm deploy.tar.gz
+                        rm -f deploy.tar.gz
                     """
                 }
             }
