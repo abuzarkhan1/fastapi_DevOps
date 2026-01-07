@@ -22,9 +22,9 @@ services:
       - app_network
 
   api:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    # build:
+    #   context: ./backend
+    #   dockerfile: Dockerfile
     image: ${DOCKER_USERNAME}/fastapi-backend:latest
     depends_on:
       db:
@@ -40,7 +40,7 @@ services:
       ALGORITHM: HS256
       ACCESS_TOKEN_EXPIRE_MINUTES: 30
       REFRESH_TOKEN_EXPIRE_DAYS: 7
-      BACKEND_CORS_ORIGINS: '["http://localhost", "http://localhost:3000", "http://127.0.0.1", "http://localhost:80"]'
+      BACKEND_CORS_ORIGINS: '["http://localhost", "http://localhost:3000", "http://127.0.0.1", "http://localhost:80", "http://13.220.87.242"]'
     ports:
       - "8000:8000"
     command: >
@@ -49,11 +49,11 @@ services:
       - app_network
 
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      args:
-        - VITE_API_URL=/api/v1
+    # build:
+    #   context: ./frontend
+    #   dockerfile: Dockerfile
+    #   args:
+    #     - VITE_API_URL=/api/v1
     image: ${DOCKER_USERNAME}/fastapi-frontend:latest
     restart: always
     ports:

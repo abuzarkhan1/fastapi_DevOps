@@ -128,23 +128,33 @@ pipeline {
                         # Ensure the target directory exists
                         ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} 'mkdir -p /home/${EC2_USER}/app'
                         
-                        # Copy the docker-compose file
+                        # Copy the docker-compose file and monitoring configuration
                         scp -o StrictHostKeyChecking=no docker-compose.yml ${EC2_USER}@${EC2_HOST}:/home/${EC2_USER}/app/
+                        scp -r -o StrictHostKeyChecking=no monitoring ${EC2_USER}@${EC2_HOST}:/home/${EC2_USER}/app/
                         
                         ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} '
                             cd /home/${EC2_USER}/app
                             export DOCKER_USERNAME=${DOCKER_HUB_USER}
                             
-                            # Stopping existing containers to free up resources
+                            echo "Stopping and cleaning up existing containers..."
                             docker-compose down --remove-orphans || true
                             
-                            # Pulling the images we just pushed
+                            echo "Pulling latest images from Docker Hub..."
                             docker-compose pull
                             
-                            # Starting services (no --build to save time/CPU)
-                            docker-compose up -d
+                            echo "Starting services in detached mode..."
+                            docker-compose up -d --remove-orphans
                             
-                            # Cleanup old images
+                            echo "Waiting for services to initialize..."
+                            sleep 15
+                            
+                            echo "Deployment Status:"
+                            docker-compose ps
+                            
+                            echo "Checking API logs for errors (last 20 lines):"
+                            docker-compose logs --tail=20 api || true
+                            
+                            echo "Cleaning up dangling images..."
                             docker image prune -f
                         '
                     """
