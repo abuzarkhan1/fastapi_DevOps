@@ -128,44 +128,50 @@ pipeline {
                         # Create a deployment package locally
                         tar -czf deploy.tar.gz docker-compose.yml monitoring
                         
-                        # Stop everything and clean up as requested
+                        # Stop everything and clean up
                         ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} '
                             if [ -d /home/${EC2_USER}/app ]; then
                                 cd /home/${EC2_USER}/app
-                                # We create a temporary .env to allow docker-compose down to find images
+                                # Create temp .env to allow clean stop
                                 echo "DOCKER_USERNAME=${DOCKER_HUB_USER}" > .env
                                 docker-compose down --volumes --remove-orphans || true
                                 cd .. && rm -rf app
                             fi
-                            # Global cleanup to "remove all this"
+                            # Deep cleanup for fresh state
                             docker system prune -a -f --volumes || true
                             mkdir -p /home/${EC2_USER}/app
                         '
                         
-                        # Upload and extract the package
+                        # Upload and extract
                         scp -o StrictHostKeyChecking=no deploy.tar.gz ${EC2_USER}@${EC2_HOST}:/home/${EC2_USER}/app/
                         ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} '
                             cd /home/${EC2_USER}/app
                             tar -xzf deploy.tar.gz
                             rm deploy.tar.gz
                             
-                            # Create .env file for docker-compose to use permanently
+                            # Create .env file
                             echo "DOCKER_USERNAME=${DOCKER_HUB_USER}" > .env
                             
-                            echo "Pulling latest images from Docker Hub..."
+                            echo "Pulling images..."
                             docker-compose pull
                             
-                            echo "Starting services in detached mode..."
+                            echo "Starting services..."
                             docker-compose up -d --remove-orphans
                             
-                            echo "Waiting for services to initialize..."
-                            sleep 15
+                            echo "Waiting 20s for services to stabilize..."
+                            sleep 20
                             
-                            echo "Deployment Status:"
-                            docker-compose ps
+                            echo "Container Status (ps -a):"
+                            docker-compose ps -a
                             
-                            echo "Checking API logs (last 50 lines):"
-                            docker-compose logs --tail=50 api || true
+                            echo "Checking API Logs:"
+                            docker-compose logs --tail=100 api || true
+                            
+                            echo "Checking Frontend Logs:"
+                            docker-compose logs --tail=100 frontend || true
+                            
+                            echo "Checking Prometheus Logs:"
+                            docker-compose logs --tail=100 prometheus || true
                         '
                         
                         # Cleanup local package
