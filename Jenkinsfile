@@ -181,7 +181,8 @@ pipeline {
                                 
                                 for container in \$container_ids; do
                                     status=\$(docker inspect --format="{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}" \$container 2>/dev/null)
-                                    container_name=\$(docker inspect --format="{{.Name}}" \$container | sed 's|^/||')
+                                    container_name=\$(docker inspect --format="{{.Name}}" \$container)
+                                    container_name=\${container_name#/}
                                     
                                     echo "  \$container_name: \$status"
                                     
