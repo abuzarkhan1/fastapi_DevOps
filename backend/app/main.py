@@ -4,7 +4,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.api import api_router
 from app.core.config import settings
 from app.core.logging import setup_logging
-from prometheus_fastapi_instrumentator import Instrumentator
 import logging
 
 # Initialize logging
@@ -15,9 +14,6 @@ app = FastAPI(
     title=settings.PROJECT_NAME,
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
 )
-
-# Prometheus Instrumentation
-Instrumentator().instrument(app).expose(app)
 
 # CORS
 app.add_middleware(

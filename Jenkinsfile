@@ -126,7 +126,7 @@ pipeline {
                 sshagent(['ec2-ssh-key']) {
                     sh """
                         # Create a deployment package locally
-                        tar -czf deploy.tar.gz docker-compose.yml monitoring
+                        tar -czf deploy.tar.gz docker-compose.yml
                         
                         # Stop everything and clean up
                         ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} '
@@ -173,9 +173,6 @@ pipeline {
                             
                             echo "API Logs:"
                             docker-compose logs --tail=100 api || true
-                            
-                            echo "Prometheus Logs:"
-                            docker-compose logs --tail=100 prometheus || true
                         '
                         
                         # Cleanup local package
