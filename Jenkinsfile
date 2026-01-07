@@ -238,12 +238,7 @@ pipeline {
         }
         success {
             echo "✅ Pipeline completed successfully!"
-            script {
-                sshagent(['ec2-ssh-key']) {
-                    sh "ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} 'sudo shutdown -h +1'"
-                }
-            }
-            echo "⚠️ Server scheduled to SHUTDOWN in 1 minute to save costs."
+            echo "🚀 Application deployed and running on EC2!"
         }
         failure {
             echo "❌ Pipeline failed! Check the logs."
