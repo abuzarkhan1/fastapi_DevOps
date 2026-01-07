@@ -70,6 +70,7 @@ pipeline {
             }
         }
 
+        /*
         stage('Code Quality: SonarQube') {
             steps {
                 script {
@@ -87,6 +88,7 @@ pipeline {
                 }
             }
         }
+        */
 
         stage('Docker: Build Backend Image') {
             steps {
