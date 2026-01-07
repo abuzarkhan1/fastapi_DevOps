@@ -173,6 +173,9 @@ pipeline {
                             
                             echo "API Logs:"
                             docker-compose logs --tail=100 api || true
+                            
+                            echo "DB Logs:"
+                            docker-compose logs --tail=100 db || true
                         '
                         
                         # Cleanup local package
