@@ -106,7 +106,6 @@ pipeline {
         }
 
         stage('Push to Docker Hub') {
-            when { branch 'master' } 
             steps {
                 withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                     sh '''
@@ -123,7 +122,6 @@ pipeline {
         }
 
         stage('Deploy to Production') {
-            when { branch 'master' }
             steps {
                 sshagent(['ec2-ssh-key']) {
                     sh """
