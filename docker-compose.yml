@@ -25,6 +25,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    image: ${DOCKER_USERNAME}/fastapi-backend:latest
     depends_on:
       db:
         condition: service_healthy
@@ -53,6 +54,7 @@ services:
       dockerfile: Dockerfile
       args:
         - VITE_API_URL=/api/v1
+    image: ${DOCKER_USERNAME}/fastapi-frontend:latest
     restart: always
     ports:
       - "80:80"

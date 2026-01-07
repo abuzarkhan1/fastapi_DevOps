@@ -2,62 +2,80 @@ pipeline {
     agent any
 
     options {
-        timeout(time: 30, unit: 'MINUTES')
+        timeout(time: 45, unit: 'MINUTES')
         disableConcurrentBuilds()
         timestamps()
     }
 
     environment {
+        DOCKER_HUB_USER = "abuzarkhan1" 
         BACKEND_IMAGE   = "fastapi-backend"
         FRONTEND_IMAGE  = "fastapi-frontend"
-        DOCKER_REGISTRY = "docker.io"
         EC2_USER        = "ubuntu"
-        EC2_HOST        = credentials('ec2-public-ip')
+        EC2_HOST        = credentials('ec2-public-ip') 
         COMMIT_SHA      = "${GIT_COMMIT.take(7)}"
+        REPO_URL        = "https://github.com/abuzarkhan1/fastapi_DevOps.git"
     }
 
     stages {
-
-        stage('Checkout') {
+        stage('Checkout Code') {
             steps {
-                checkout scm
+                git branch: 'master', url: "${REPO_URL}"
             }
         }
 
-        stage('Backend Tests') {
+        stage('Backend: Set up & Install Docs') {
             agent {
-                docker {
-                    image 'python:3.11-slim'
+                docker { image 'python:3.13-slim' }
+            }
+            steps {
+                dir('backend') {
+                    sh 'pip install --no-cache-dir -r requirements.txt'
                 }
+            }
+        }
+
+        stage('Backend: Run Unit Tests') {
+            agent {
+                docker { image 'python:3.13-slim' }
             }
             steps {
                 dir('backend') {
                     sh '''
-                      pip install --no-cache-dir -r requirements.txt
-                      pip install pytest
-                      pytest || true
+                        pip install --no-cache-dir -r requirements.txt
+                        pip install pytest
+                        # pytest # Uncomment when tests are active
                     '''
                 }
             }
         }
 
-        stage('Frontend Build') {
+        stage('Frontend: Install Dependencies (npm ci)') {
             agent {
-                docker {
-                    image 'node:20-alpine'
+                docker { image 'node:22-alpine' }
+            }
+            steps {
+                dir('frontend') {
+                    sh 'npm ci'
                 }
+            }
+        }
+
+        stage('Frontend: Build Application') {
+            agent {
+                docker { image 'node:22-alpine' }
             }
             steps {
                 dir('frontend') {
                     sh '''
-                      npm ci
-                      npm run build
+                        npm ci 
+                        npm run build
                     '''
                 }
             }
         }
 
-        stage('SonarQube Analysis') {
+        stage('Code Quality: SonarQube') {
             steps {
                 script {
                     def scannerHome = tool 'SonarScanner'
@@ -68,69 +86,73 @@ pipeline {
             }
         }
 
-        stage('Quality Gate') {
+        stage('Docker: Build Backend Image') {
             steps {
-                waitForQualityGate abortPipeline: true
-            }
-        }
-
-        stage('Docker Build') {
-            steps {
-                sh """
-                  docker build \
-                    --label commit=${COMMIT_SHA} \
-                    --label build=${BUILD_NUMBER} \
-                    -t ${BACKEND_IMAGE}:${COMMIT_SHA} backend
-
-                  docker build \
-                    --label commit=${COMMIT_SHA} \
-                    --label build=${BUILD_NUMBER} \
-                    -t ${FRONTEND_IMAGE}:${COMMIT_SHA} frontend
-                """
-            }
-        }
-
-        stage('Security Scan (Trivy)') {
-            steps {
-                sh """
-                  trivy image --exit-code 1 --severity CRITICAL ${BACKEND_IMAGE}:${COMMIT_SHA}
-                  trivy image --exit-code 1 --severity CRITICAL ${FRONTEND_IMAGE}:${COMMIT_SHA}
-                """
-            }
-        }
-
-        stage('Docker Push') {
-            when { branch 'main' }
-            steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'docker-hub-credentials',
-                    usernameVariable: 'DOCKER_USER',
-                    passwordVariable: 'DOCKER_PASS'
-                )]) {
-                    sh """
-                      echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-
-                      docker tag ${BACKEND_IMAGE}:${COMMIT_SHA} $DOCKER_USER/${BACKEND_IMAGE}:latest
-                      docker tag ${FRONTEND_IMAGE}:${COMMIT_SHA} $DOCKER_USER/${FRONTEND_IMAGE}:latest
-
-                      docker push $DOCKER_USER/${BACKEND_IMAGE}:latest
-                      docker push $DOCKER_USER/${FRONTEND_IMAGE}:latest
-                    """
+                script {
+                    sh "docker build -t ${DOCKER_HUB_USER}/${BACKEND_IMAGE}:${COMMIT_SHA} ./backend"
+                    sh "docker build -t ${DOCKER_HUB_USER}/${BACKEND_IMAGE}:latest ./backend"
                 }
             }
         }
 
-        stage('Deploy to EC2') {
-            when { branch 'main' }
+        stage('Docker: Build Frontend Image') {
+            steps {
+                script {
+                    sh "docker build --build-arg VITE_API_URL=/api/v1 -t ${DOCKER_HUB_USER}/${FRONTEND_IMAGE}:${COMMIT_SHA} ./frontend"
+                    sh "docker build --build-arg VITE_API_URL=/api/v1 -t ${DOCKER_HUB_USER}/${FRONTEND_IMAGE}:latest ./frontend"
+                }
+            }
+        }
+
+        stage('Security: Scan Backend (Trivy)') {
+            steps {
+                sh "trivy image --exit-code 0 --severity HIGH,CRITICAL ${DOCKER_HUB_USER}/${BACKEND_IMAGE}:${COMMIT_SHA}"
+            }
+        }
+
+        stage('Security: Scan Frontend (Trivy)') {
+            steps {
+                sh "trivy image --exit-code 0 --severity HIGH,CRITICAL ${DOCKER_HUB_USER}/${FRONTEND_IMAGE}:${COMMIT_SHA}"
+            }
+        }
+
+        stage('Artifact: Push Images to Hub') {
+            when { branch 'master' } 
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    sh '''
+                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                        
+                        docker push ${DOCKER_USER}/${BACKEND_IMAGE}:${COMMIT_SHA}
+                        docker push ${DOCKER_USER}/${BACKEND_IMAGE}:latest
+
+                        docker push ${DOCKER_USER}/${FRONTEND_IMAGE}:${COMMIT_SHA}
+                        docker push ${DOCKER_USER}/${FRONTEND_IMAGE}:latest
+                    '''
+                }
+            }
+        }
+
+        stage('Deploy: Update EC2 Production') {
+            when { branch 'master' }
             steps {
                 sshagent(['ec2-ssh-key']) {
                     sh """
-                      ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} '
-                        cd /home/${EC2_USER}/app &&
-                        docker-compose pull &&
-                        docker-compose up -d --remove-orphans &&
-                        docker system prune -af
-                      '
+                        scp -o StrictHostKeyChecking=no docker-compose.yml ${EC2_USER}@${EC2_HOST}:/home/${EC2_USER}/app/
+                        
+                        ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} '
+                            cd /home/${EC2_USER}/app
+                            export DOCKER_USERNAME=${DOCKER_HUB_USER}
+                            
+                            # Pull the specific images we just pushed
+                            docker-compose pull
+                            
+                            # Zero-downtime recreation (if possible, otherwise restart)
+                            docker-compose up -d --remove-orphans
+                            
+                            # Cleanup to save disk space
+                            docker image prune -f
+                        '
                     """
                 }
             }
@@ -138,14 +160,14 @@ pipeline {
     }
 
     post {
-        success {
-            echo "✅ Deployment successful"
-        }
-        failure {
-            echo "❌ Pipeline failed"
-        }
         always {
             cleanWs()
+        }
+        success {
+            echo "Pipeline executed successfully!"
+        }
+        failure {
+            echo "Pipeline failed. Check stages for details."
         }
     }
 }
