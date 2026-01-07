@@ -125,6 +125,10 @@ pipeline {
             steps {
                 sshagent(['ec2-ssh-key']) {
                     sh """
+                        # Ensure the target directory exists
+                        ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} 'mkdir -p /home/${EC2_USER}/app'
+                        
+                        # Copy the docker-compose file
                         scp -o StrictHostKeyChecking=no docker-compose.yml ${EC2_USER}@${EC2_HOST}:/home/${EC2_USER}/app/
                         
                         ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} '
