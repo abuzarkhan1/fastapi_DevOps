@@ -45,23 +45,28 @@ services:
     ports:
       - "8000:8000"
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8000/api/v1/login/test-token" ]
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
       interval: 10s
       timeout: 5s
       retries: 5
-    command: >
-      sh -c "echo 'Waiting for database...' && 
-             python -c 'import socket, time; 
-             while True: 
-                 try: 
-                     socket.create_connection((\"db\", 3306), timeout=1); 
-                     break 
-                 except Exception: 
-                     time.sleep(1)' && 
-             echo 'Database is up - running migrations...' && 
-             alembic upgrade head && 
-             echo 'Starting application...' && 
-             uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    command:
+      - sh
+      - -c
+      - |
+        echo 'Waiting for database...'
+        python -c '
+        import socket, time
+        while True:
+            try:
+                socket.create_connection(("db", 3306), timeout=1)
+                break
+            except Exception:
+                time.sleep(1)
+        '
+        echo 'Database is up - running migrations...'
+        alembic upgrade head
+        echo 'Starting application...'
+        uvicorn app.main:app --host 0.0.0.0 --port 8000
     networks:
       - app_network
 
