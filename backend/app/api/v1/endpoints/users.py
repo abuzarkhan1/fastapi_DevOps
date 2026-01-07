@@ -1,9 +1,9 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
-from backend.app.schemas.user import UserResponse, UserUpdate, UserCreate
-from backend.app.services.user_service import UserService
-from backend.app.api.deps import get_user_service, get_current_user, RoleChecker
-from backend.app.models.user import User, UserRole
+from app.schemas.user import UserResponse, UserUpdate, UserCreate
+from app.services.user_service import UserService
+from app.api.deps import get_user_service, get_current_user, RoleChecker
+from app.models.user import User, UserRole
 
 router = APIRouter()
 

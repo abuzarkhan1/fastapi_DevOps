@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Union, Optional
 from jose import jwt
 from passlib.context import CryptContext
-from backend.app.core.config import settings
+from app.core.config import settings
 
 # Using Argon2 for backend password hashing (superior to bcrypt)
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")

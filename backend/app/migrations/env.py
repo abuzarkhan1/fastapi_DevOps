@@ -3,9 +3,9 @@ from logging.config import fileConfig
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 from alembic import context
-from backend.app.core.config import settings
-from backend.app.db.repository import Base
-from backend.app.models.user import User # Import all models for Base.metadata
+from app.core.config import settings
+from app.db.repository import Base
+from app.models.user import User # Import all models for Base.metadata
 
 config = context.config
 if config.config_file_name is not None:

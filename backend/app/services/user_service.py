@@ -1,10 +1,10 @@
 from datetime import datetime
 from typing import Optional, Tuple
 from fastapi import HTTPException, status
-from backend.app.db.user_repository import UserRepository
-from backend.app.schemas.user import UserCreate, UserLogin
-from backend.app.core.security import get_password_hash, verify_password, create_access_token, create_refresh_token
-from backend.app.models.user import User
+from app.db.user_repository import UserRepository
+from app.schemas.user import UserCreate, UserLogin
+from app.core.security import get_password_hash, verify_password, create_access_token, create_refresh_token
+from app.models.user import User
 
 class UserService:
     def __init__(self, user_repo: UserRepository):

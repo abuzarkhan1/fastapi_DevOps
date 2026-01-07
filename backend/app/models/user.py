@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, Boolean, Enum
 import enum
-from backend.app.db.repository import Base
+from app.db.repository import Base
 
 class UserRole(str, enum.Enum):
     ADMIN = "admin"
