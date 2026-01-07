@@ -147,10 +147,16 @@ pipeline {
                         ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} '
                             cd /home/${EC2_USER}/app
                             tar -xzf deploy.tar.gz
-                            rm deploy.tar.gz
+                            rm -f deploy.tar.gz
+                            
+                            echo "Verifying Server File Structure (ls -lAR):"
+                            ls -lAR .
                             
                             # Create .env file
                             echo "DOCKER_USERNAME=${DOCKER_HUB_USER}" > .env
+                            
+                            echo "Verifying Backend Image Content:"
+                            docker run --rm ${DOCKER_HUB_USER}/${BACKEND_IMAGE}:latest ls -la /app || echo "Could not inspect image"
                             
                             echo "Pulling images..."
                             docker-compose pull
@@ -158,19 +164,16 @@ pipeline {
                             echo "Starting services..."
                             docker-compose up -d --remove-orphans
                             
-                            echo "Waiting 20s for services to stabilize..."
-                            sleep 20
+                            echo "Waiting 30s for services to stabilize..."
+                            sleep 30
                             
                             echo "Container Status (ps -a):"
                             docker-compose ps -a
                             
-                            echo "Checking API Logs:"
+                            echo "API Logs:"
                             docker-compose logs --tail=100 api || true
                             
-                            echo "Checking Frontend Logs:"
-                            docker-compose logs --tail=100 frontend || true
-                            
-                            echo "Checking Prometheus Logs:"
+                            echo "Prometheus Logs:"
                             docker-compose logs --tail=100 prometheus || true
                         '
                         

@@ -40,11 +40,11 @@ services:
       ALGORITHM: HS256
       ACCESS_TOKEN_EXPIRE_MINUTES: 30
       REFRESH_TOKEN_EXPIRE_DAYS: 7
-      BACKEND_CORS_ORIGINS: '["http://localhost", "http://localhost:3000", "http://127.0.0.1", "http://localhost:80", "http://13.220.87.242", "http://13.220.87.242:3000"]'
+      BACKEND_CORS_ORIGINS: '["http://localhost", "http://localhost:3000", "http://127.0.0.1", "http://localhost:80", "http://13.220.87.242", "http://13.220.87.242:80", "http://13.220.87.242:3000"]'
     ports:
       - "8000:8000"
     command: >
-      sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+      sh -c "ls -la && alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
     networks:
       - app_network
 
@@ -67,7 +67,7 @@ services:
     image: prom/prometheus:latest
     restart: always
     volumes:
-      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     ports:
       - "9090:9090"
