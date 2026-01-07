@@ -70,8 +70,8 @@ pipeline {
             }
         }
 
-        /*
         stage('Code Quality: SonarQube') {
+            when { expression { return false } } // Disabled by user request
             steps {
                 script {
                     def scannerHome = tool 'SonarScanner'
@@ -88,7 +88,6 @@ pipeline {
                 }
             }
         }
-        */
 
         stage('Docker: Build Backend Image') {
             steps {
