@@ -86,8 +86,8 @@ pipeline {
                     withSonarQubeEnv('SonarQube Server') {
                         sh """
                             ${scannerHome}/bin/sonar-scanner \
-                            -Dsonar.projectKey=fastapi-devops \
-                            -Dsonar.projectName='FastAPI DevOps' \
+                            -Dsonar.projectKey=fastapi-project \
+                            -Dsonar.projectName='fastapi-project' \
                             -Dsonar.sources=. \
                             -Dsonar.exclusions=**/venv/**,**/node_modules/**,**/__pycache__/**,**/dist/** \
                             -Dsonar.python.version=3.13
