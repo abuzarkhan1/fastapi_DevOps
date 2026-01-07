@@ -24,14 +24,10 @@ pipeline {
             }
         }
 
-        // -------------------------------------------------------------------------
-        // Backend Config
-        // -------------------------------------------------------------------------
         stage('Backend: Setup & Test') {
             agent {
                 docker { 
                     image 'python:3.13-slim' 
-                    // Mount /tmp as HOME to fix permission issues with tools trying to write to ~/.local or ~/.cache
                     args '-e HOME=/tmp'
                 }
             }
@@ -54,15 +50,10 @@ pipeline {
                 }
             }
         }
-
-        // -------------------------------------------------------------------------
-        // Frontend Config
-        // -------------------------------------------------------------------------
         stage('Frontend: Setup & Build') {
             agent {
                 docker { 
                     image 'node:22-alpine'
-                    // Fix permissions for npm/yarn caches
                     args '-e HOME=/tmp' 
                 }
             }
