@@ -125,19 +125,26 @@ pipeline {
             steps {
                 sshagent(['ec2-ssh-key']) {
                     sh """
-                        # Ensure the target directory exists
-                        ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} 'mkdir -p /home/${EC2_USER}/app'
+                        # Create a deployment package locally
+                        tar -czf deploy.tar.gz docker-compose.yml monitoring
                         
-                        # Copy the docker-compose file and monitoring configuration
-                        scp -o StrictHostKeyChecking=no docker-compose.yml ${EC2_USER}@${EC2_HOST}:/home/${EC2_USER}/app/
-                        scp -r -o StrictHostKeyChecking=no monitoring ${EC2_USER}@${EC2_HOST}:/home/${EC2_USER}/app/
+                        # Stop existing containers if the folder exists
+                        ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} '
+                            if [ -d /home/${EC2_USER}/app ]; then
+                                cd /home/${EC2_USER}/app && docker-compose down --volumes --remove-orphans || true
+                                cd .. && rm -rf app
+                            fi
+                            mkdir -p /home/${EC2_USER}/app
+                        '
                         
+                        # Upload and extract the package
+                        scp -o StrictHostKeyChecking=no deploy.tar.gz ${EC2_USER}@${EC2_HOST}:/home/${EC2_USER}/app/
                         ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} '
                             cd /home/${EC2_USER}/app
-                            export DOCKER_USERNAME=${DOCKER_HUB_USER}
+                            tar -xzf deploy.tar.gz
+                            rm deploy.tar.gz
                             
-                            echo "Stopping and cleaning up existing containers..."
-                            docker-compose down --remove-orphans || true
+                            export DOCKER_USERNAME=${DOCKER_HUB_USER}
                             
                             echo "Pulling latest images from Docker Hub..."
                             docker-compose pull
@@ -157,6 +164,9 @@ pipeline {
                             echo "Cleaning up dangling images..."
                             docker image prune -f
                         '
+                        
+                        # Cleanup local package
+                        rm deploy.tar.gz
                     """
                 }
             }
