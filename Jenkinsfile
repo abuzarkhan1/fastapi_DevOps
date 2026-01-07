@@ -166,16 +166,22 @@ pipeline {
                             docker compose up -d --remove-orphans
                             
                             echo "🔍 Waiting for Containers to be HEALTHY..."
-                            # Wait up to 60 seconds
+                            # Wait up to 60 seconds (12 x 5s)
                             for i in {1..12}; do
-                                statuses=\$(docker inspect --format=\'{{.State.Health.Status}}\' \$(docker compose ps -q) 2>/dev/null || echo "starting")
+                                # Get statuses as a space-separated string
+                                statuses=\$(docker inspect --format=\'{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}\' \$(docker compose ps -q) 2>/dev/null || echo "starting")
                                 echo "Current statuses: \$statuses"
-                                if [[ ! \$statuses =~ "starting" && ! \$statuses =~ "unhealthy" ]]; then
-                                    echo "✅ All containers are HEALTHY!"
+                                
+                                # Check if ANY container is still starting or unhealthy
+                                if [[ \$statuses =~ "starting" || \$statuses =~ "unhealthy" ]]; then
+                                    echo "... Waiting for services to stabilize ..."
+                                elif [[ \$statuses =~ "healthy" ]]; then
+                                    echo "✅ All required containers are HEALTHY!"
                                     break
                                 fi
+                                
                                 if [ \$i -eq 12 ]; then
-                                    echo "❌ ERROR: Some containers failed to become healthy in time."
+                                    echo "❌ ERROR: Health check timeout reached."
                                     docker compose ps
                                     docker compose logs --tail=50
                                     exit 1
