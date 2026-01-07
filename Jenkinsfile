@@ -134,7 +134,7 @@ pipeline {
                                 cd /home/${EC2_USER}/app
                                 # Create temp .env to allow clean stop
                                 echo "DOCKER_USERNAME=${DOCKER_HUB_USER}" > .env
-                                docker-compose down --volumes --remove-orphans || true
+                                docker compose down --volumes --remove-orphans || true
                                 cd ..
                                 sudo rm -rf app
                             fi
@@ -160,15 +160,15 @@ pipeline {
                             docker run --rm ${DOCKER_HUB_USER}/${BACKEND_IMAGE}:latest ls -la /app || echo "Could not inspect image"
                             
                             echo "Pulling images..."
-                            docker-compose pull
+                            docker compose pull
                             
                             echo "Starting services..."
-                            docker-compose up -d --remove-orphans
+                            docker compose up -d --remove-orphans
                             
                             echo "🔍 Waiting for Containers to be HEALTHY..."
                             # Wait up to 60 seconds
                             for i in {1..12}; do
-                                statuses=\$(docker inspect --format=\'{{.State.Health.Status}}\' \$(docker-compose ps -q) 2>/dev/null || echo "starting")
+                                statuses=\$(docker inspect --format=\'{{.State.Health.Status}}\' \$(docker compose ps -q) 2>/dev/null || echo "starting")
                                 echo "Current statuses: \$statuses"
                                 if [[ ! \$statuses =~ "starting" && ! \$statuses =~ "unhealthy" ]]; then
                                     echo "✅ All containers are HEALTHY!"
@@ -176,15 +176,15 @@ pipeline {
                                 fi
                                 if [ \$i -eq 12 ]; then
                                     echo "❌ ERROR: Some containers failed to become healthy in time."
-                                    docker-compose ps
-                                    docker-compose logs --tail=50
+                                    docker compose ps
+                                    docker compose logs --tail=50
                                     exit 1
                                 fi
                                 sleep 5
                             done
                             
                             echo "Container Status (ps -a):"
-                            docker-compose ps -a
+                            docker compose ps -a
                         '
                         
                         # Cleanup local package
