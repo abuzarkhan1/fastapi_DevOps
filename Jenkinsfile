@@ -135,7 +135,8 @@ pipeline {
                                 # Create temp .env to allow clean stop
                                 echo "DOCKER_USERNAME=${DOCKER_HUB_USER}" > .env
                                 docker-compose down --volumes --remove-orphans || true
-                                cd .. && rm -rf app
+                                cd ..
+                                sudo rm -rf app
                             fi
                             # Deep cleanup for fresh state
                             docker system prune -a -f --volumes || true
