@@ -54,13 +54,10 @@ services:
       - -c
       - |
         echo "Waiting for database..."
-        python -c "import socket, time; 
-        while True:
-            try:
-                with socket.create_connection(('db', 3306), timeout=1):
-                    break
-            except:
-                time.sleep(1)"
+        until python -c "import socket; socket.create_connection(('db', 3306), timeout=1)" 2>/dev/null; do
+          echo "..."
+          sleep 2
+        done
         echo "Database is up - running migrations..."
         alembic upgrade head
         echo "Starting application..."

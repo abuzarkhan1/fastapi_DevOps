@@ -156,9 +156,6 @@ pipeline {
                             # Create .env file
                             echo "DOCKER_USERNAME=${DOCKER_HUB_USER}" > .env
                             
-                            echo "Verifying Backend Image Content:"
-                            docker run --rm ${DOCKER_HUB_USER}/${BACKEND_IMAGE}:latest ls -la /app || echo "Could not inspect image"
-                            
                             echo "Pulling images..."
                             docker compose pull
                             
@@ -166,30 +163,59 @@ pipeline {
                             docker compose up -d --remove-orphans
                             
                             echo "🔍 Waiting for Containers to be HEALTHY..."
+                            
                             # Wait up to 60 seconds (12 x 5s)
                             for i in {1..12}; do
-                                # Get statuses as a space-separated string
-                                statuses=\$(docker inspect --format=\'{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}\' \$(docker compose ps -q) 2>/dev/null || echo "starting")
-                                echo "Current statuses: \$statuses"
+                                # Get all container IDs
+                                container_ids=\$(docker compose ps -q 2>/dev/null)
                                 
-                                # Check if ANY container is still starting or unhealthy
-                                if [[ \$statuses =~ "starting" || \$statuses =~ "unhealthy" ]]; then
-                                    echo "... Waiting for services to stabilize ..."
-                                elif [[ \$statuses =~ "healthy" ]]; then
-                                    echo "✅ All required containers are HEALTHY!"
+                                if [[ -z "\$container_ids" ]]; then
+                                    echo "... Starting containers ..."
+                                    sleep 5
+                                    continue
+                                fi
+                                
+                                # Check health status of each container
+                                all_healthy=true
+                                unhealthy_containers=""
+                                
+                                for container in \$container_ids; do
+                                    status=\$(docker inspect --format="{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}" \$container 2>/dev/null)
+                                    container_name=\$(docker inspect --format="{{.Name}}" \$container | sed "s/^\///")
+                                    
+                                    echo "  \$container_name: \$status"
+                                    
+                                    if [[ "\$status" != "healthy" ]]; then
+                                        all_healthy=false
+                                        unhealthy_containers="\$unhealthy_containers \$container_name(\$status)"
+                                    fi
+                                done
+                                
+                                if \$all_healthy; then
+                                    echo ""
+                                    echo "✅ All containers are HEALTHY!"
                                     break
+                                else
+                                    echo "  ... Waiting for:\$unhealthy_containers"
+                                    echo ""
                                 fi
                                 
                                 if [ \$i -eq 12 ]; then
-                                    echo "❌ ERROR: Health check timeout reached."
+                                    echo "❌ ERROR: Health check timeout reached after 60 seconds."
+                                    echo ""
+                                    echo "Final Container Status:"
                                     docker compose ps
+                                    echo ""
+                                    echo "Recent Logs:"
                                     docker compose logs --tail=50
                                     exit 1
                                 fi
+                                
                                 sleep 5
                             done
                             
-                            echo "Container Status (ps -a):"
+                            echo ""
+                            echo "Final Container Status:"
                             docker compose ps -a
                         '
                         
