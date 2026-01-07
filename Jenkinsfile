@@ -8,13 +8,14 @@ pipeline {
     }
 
     environment {
-        DOCKER_HUB_USER = "abuzarkhan1" 
-        BACKEND_IMAGE   = "fastapi-backend"
-        FRONTEND_IMAGE  = "fastapi-frontend"
-        EC2_USER        = "ubuntu"
-        EC2_HOST        = credentials('ec2-public-ip') 
-        COMMIT_SHA      = "${GIT_COMMIT.take(7)}"
-        REPO_URL        = "https://github.com/abuzarkhan1/fastapi_DevOps.git"
+        DOCKER_HUB_USER    = "abuzarkhan1" 
+        BACKEND_IMAGE      = "fastapi-backend"
+        FRONTEND_IMAGE     = "fastapi-frontend"
+        EC2_USER           = "ubuntu"
+        EC2_HOST           = credentials('ec2-public-ip') 
+        COMMIT_SHA         = "${GIT_COMMIT.take(7)}"
+        REPO_URL           = "https://github.com/abuzarkhan1/fastapi_DevOps.git"
+        SONAR_SCANNER_HOME = tool 'SonarScanner'
     }
 
     stages {
@@ -24,119 +25,104 @@ pipeline {
             }
         }
 
-        stage('Backend: Setup & Test') {
-            agent {
-                docker { 
-                    image 'python:3.13-slim' 
-                    args '-e HOME=/tmp'
-                }
-            }
+        stage('SonarQube Analysis - Backend') {
+            when { expression { return false } }
             steps {
                 dir('backend') {
-                    sh '''
-                        # Create and activate virtual environment for persistence and isolation
-                        python -m venv venv
-                        . venv/bin/activate
-                        
-                        # Upgrade pip and install dependencies
-                        pip install --upgrade pip
-                        pip install --no-cache-dir -r requirements.txt
-                        pip install pytest
-                        
-                        # Run Tests
-                        # pytest
-                        echo "Backend tests passed (placeholder)"
-                    '''
-                }
-            }
-        }
-        stage('Frontend: Setup & Build') {
-            agent {
-                docker { 
-                    image 'node:22-alpine'
-                    args '-e HOME=/tmp' 
-                }
-            }
-            steps {
-                dir('frontend') {
-                    sh '''
-                        # Install dependencies
-                        npm ci --cache /tmp/.npm
-                        
-                        # Build
-                        npm run build
-                    '''
-                }
-            }
-        }
-
-        stage('Code Quality: SonarQube') {
-            when { expression { return false } } // Disabled by user request
-            steps {
-                script {
-                    def scannerHome = tool 'SonarScanner'
                     withSonarQubeEnv('SonarQube Server') {
                         sh """
-                            ${scannerHome}/bin/sonar-scanner \
-                            -Dsonar.projectKey=fastapi-project \
-                            -Dsonar.projectName='fastapi-project' \
-                            -Dsonar.sources=. \
-                            -Dsonar.exclusions=**/venv/**,**/node_modules/**,**/__pycache__/**,**/dist/** \
-                            -Dsonar.python.version=3.13
+                            ${SONAR_SCANNER_HOME}/bin/sonar-scanner \
+                                -Dsonar.projectKey=fastapi-backend \
+                                -Dsonar.projectName="FastAPI Backend" \
+                                -Dsonar.projectVersion=1.0 \
+                                -Dsonar.sources=. \
+                                -Dsonar.exclusions=venv/**,**/__pycache__/**,*.log \
+                                -Dsonar.python.version=3.13
                         """
                     }
                 }
             }
         }
 
-        stage('Docker: Build Backend Image') {
+        stage('SonarQube Analysis - Frontend') {
+            when { expression { return false } }
+            steps {
+                dir('frontend') {
+                    withSonarQubeEnv('SonarQube Server') {
+                        sh """
+                            ${SONAR_SCANNER_HOME}/bin/sonar-scanner \
+                                -Dsonar.projectKey=fastapi-frontend \
+                                -Dsonar.projectName="FastAPI Frontend" \
+                                -Dsonar.projectVersion=1.0 \
+                                -Dsonar.sources=src \
+                                -Dsonar.exclusions=node_modules/**,dist/**,build/**,*.log
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            when { expression { return false } }
             steps {
                 script {
+                    timeout(time: 5, unit: 'MINUTES') {
+                        def qg = waitForQualityGate()
+                        if (qg.status != 'OK') {
+                            echo "Quality Gate failed: ${qg.status}"
+                            currentBuild.result = 'UNSTABLE'
+                        } else {
+                            echo "Quality Gate passed!"
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Build Docker Images') {
+            steps {
+                script {
+                    echo "Building Backend Image..."
                     sh "docker build -t ${DOCKER_HUB_USER}/${BACKEND_IMAGE}:${COMMIT_SHA} ./backend"
-                    sh "docker build -t ${DOCKER_HUB_USER}/${BACKEND_IMAGE}:latest ./backend"
-                }
-            }
-        }
+                    sh "docker tag ${DOCKER_HUB_USER}/${BACKEND_IMAGE}:${COMMIT_SHA} ${DOCKER_HUB_USER}/${BACKEND_IMAGE}:latest"
 
-        stage('Docker: Build Frontend Image') {
-            steps {
-                script {
+                    echo "Building Frontend Image..."
                     sh "docker build --build-arg VITE_API_URL=/api/v1 -t ${DOCKER_HUB_USER}/${FRONTEND_IMAGE}:${COMMIT_SHA} ./frontend"
-                    sh "docker build --build-arg VITE_API_URL=/api/v1 -t ${DOCKER_HUB_USER}/${FRONTEND_IMAGE}:latest ./frontend"
+                    sh "docker tag ${DOCKER_HUB_USER}/${FRONTEND_IMAGE}:${COMMIT_SHA} ${DOCKER_HUB_USER}/${FRONTEND_IMAGE}:latest"
                 }
             }
         }
 
-        stage('Security: Scan Backend (Trivy)') {
+        stage('Security Scan - Backend') {
             steps {
                 sh "trivy image --exit-code 0 --severity HIGH,CRITICAL ${DOCKER_HUB_USER}/${BACKEND_IMAGE}:${COMMIT_SHA}"
             }
         }
 
-        stage('Security: Scan Frontend (Trivy)') {
+        stage('Security Scan - Frontend') {
             steps {
                 sh "trivy image --exit-code 0 --severity HIGH,CRITICAL ${DOCKER_HUB_USER}/${FRONTEND_IMAGE}:${COMMIT_SHA}"
             }
         }
 
-        stage('Artifact: Push Images to Hub') {
+        stage('Push to Docker Hub') {
             when { branch 'master' } 
             steps {
                 withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                     sh '''
                         echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
                         
-                        docker push ${DOCKER_USER}/${BACKEND_IMAGE}:${COMMIT_SHA}
-                        docker push ${DOCKER_USER}/${BACKEND_IMAGE}:latest
+                        docker push ${DOCKER_HUB_USER}/${BACKEND_IMAGE}:${COMMIT_SHA}
+                        docker push ${DOCKER_HUB_USER}/${BACKEND_IMAGE}:latest
 
-                        docker push ${DOCKER_USER}/${FRONTEND_IMAGE}:${COMMIT_SHA}
-                        docker push ${DOCKER_USER}/${FRONTEND_IMAGE}:latest
+                        docker push ${DOCKER_HUB_USER}/${FRONTEND_IMAGE}:${COMMIT_SHA}
+                        docker push ${DOCKER_HUB_USER}/${FRONTEND_IMAGE}:latest
                     '''
                 }
             }
         }
 
-        stage('Deploy: Update EC2 Production') {
+        stage('Deploy to Production') {
             when { branch 'master' }
             steps {
                 sshagent(['ec2-ssh-key']) {
@@ -147,13 +133,16 @@ pipeline {
                             cd /home/${EC2_USER}/app
                             export DOCKER_USERNAME=${DOCKER_HUB_USER}
                             
-                            # Pull the specific images we just pushed
+                            # Stopping existing containers to free up resources
+                            docker-compose down --remove-orphans || true
+                            
+                            # Pulling the images we just pushed
                             docker-compose pull
                             
-                            # Zero-downtime recreation (if possible, otherwise restart)
-                            docker-compose up -d --remove-orphans
+                            # Starting services (no --build to save time/CPU)
+                            docker-compose up -d
                             
-                            # Cleanup to save disk space
+                            # Cleanup old images
                             docker image prune -f
                         '
                     """
@@ -164,13 +153,17 @@ pipeline {
 
     post {
         always {
+            sh '''
+                echo "Cleaning up workspace and Docker resources..."
+                docker system prune -f || true
+            '''
             cleanWs()
         }
         success {
-            echo "Pipeline executed successfully!"
+            echo "✅ Pipeline completed successfully!"
         }
         failure {
-            echo "Pipeline failed. Check stages for details."
+            echo "❌ Pipeline failed! Check the logs."
         }
     }
 }
