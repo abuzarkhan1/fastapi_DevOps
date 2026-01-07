@@ -84,7 +84,14 @@ pipeline {
                 script {
                     def scannerHome = tool 'SonarScanner'
                     withSonarQubeEnv('SonarQube Server') {
-                        sh "${scannerHome}/bin/sonar-scanner"
+                        sh """
+                            ${scannerHome}/bin/sonar-scanner \
+                            -Dsonar.projectKey=fastapi-devops \
+                            -Dsonar.projectName='FastAPI DevOps' \
+                            -Dsonar.sources=. \
+                            -Dsonar.exclusions=**/venv/**,**/node_modules/**,**/__pycache__/**,**/dist/** \
+                            -Dsonar.python.version=3.13
+                        """
                     }
                 }
             }
