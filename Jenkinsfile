@@ -165,17 +165,26 @@ pipeline {
                             echo "Starting services..."
                             docker-compose up -d --remove-orphans
                             
-                            echo "Waiting 30s for services to stabilize..."
-                            sleep 30
+                            echo "🔍 Waiting for Containers to be HEALTHY..."
+                            # Wait up to 60 seconds
+                            for i in {1..12}; do
+                                statuses=$(docker inspect --format='{{.State.Health.Status}}' $(docker-compose ps -q) 2>/dev/null || echo "starting")
+                                echo "Current statuses: $statuses"
+                                if [[ ! $statuses =~ "starting" && ! $statuses =~ "unhealthy" ]]; then
+                                    echo "✅ All containers are HEALTHY!"
+                                    break
+                                fi
+                                if [ $i -eq 12 ]; then
+                                    echo "❌ ERROR: Some containers failed to become healthy in time."
+                                    docker-compose ps
+                                    docker-compose logs --tail=50
+                                    exit 1
+                                fi
+                                sleep 5
+                            done
                             
                             echo "Container Status (ps -a):"
                             docker-compose ps -a
-                            
-                            echo "API Logs:"
-                            docker-compose logs --tail=100 api || true
-                            
-                            echo "DB Logs:"
-                            docker-compose logs --tail=100 db || true
                         '
                         
                         # Cleanup local package
@@ -196,6 +205,12 @@ pipeline {
         }
         success {
             echo "✅ Pipeline completed successfully!"
+            script {
+                sshagent(['ec2-ssh-key']) {
+                    sh "ssh -o StrictHostKeyChecking=no ${EC2_USER}@${EC2_HOST} 'sudo shutdown -h +1'"
+                }
+            }
+            echo "⚠️ Server scheduled to SHUTDOWN in 1 minute to save costs."
         }
         failure {
             echo "❌ Pipeline failed! Check the logs."
