@@ -15,7 +15,7 @@ pipeline {
         EC2_HOST           = credentials('ec2-public-ip') 
         COMMIT_SHA         = "${GIT_COMMIT.take(7)}"
         REPO_URL           = "https://github.com/abuzarkhan1/fastapi_DevOps.git"
-        SONAR_SCANNER_HOME = tool 'SonarScanner'
+        // SONAR_SCANNER_HOME = tool 'SonarScanner'
     }
 
     stages {
